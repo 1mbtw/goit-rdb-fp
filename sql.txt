@@ -1,0 +1,135 @@
+
+-- TASK 01
+
+CREATE SCHEMA IF NOT EXISTS pandemic;
+USE pandemic;
+
+SELECT COUNT(*) FROM infectious_cases;
+
+
+-- TASK 02
+
+DROP TABLE IF EXISTS infectious_cases_normalized;
+DROP TABLE IF EXISTS entities;
+
+CREATE TABLE entities (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    entity VARCHAR(255) NOT NULL,
+    code VARCHAR(255) NULL
+);
+
+INSERT INTO entities (entity, code)
+SELECT DISTINCT
+    TRIM(Entity),
+    NULLIF(TRIM(Code), '')
+FROM infectious_cases;
+
+CREATE TABLE infectious_cases_normalized (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    entity_id INT NOT NULL,
+    year INT NOT NULL,
+    number_yaws DOUBLE NULL,
+    polio_cases DOUBLE NULL,
+    cases_guinea_worm DOUBLE NULL,
+    number_rabies DOUBLE NULL,
+    number_malaria DOUBLE NULL,
+    number_hiv DOUBLE NULL,
+    number_tuberculosis DOUBLE NULL,
+    number_smallpox DOUBLE NULL,
+    number_cholera_cases DOUBLE NULL,
+    FOREIGN KEY (entity_id) REFERENCES entities(id)
+);
+
+INSERT INTO infectious_cases_normalized (
+    entity_id,
+    year,
+    number_yaws,
+    polio_cases,
+    cases_guinea_worm,
+    number_rabies,
+    number_malaria,
+    number_hiv,
+    number_tuberculosis,
+    number_smallpox,
+    number_cholera_cases
+)
+SELECT
+    e.id,
+    CAST(ic.Year AS UNSIGNED),
+    CAST(NULLIF(TRIM(ic.Number_yaws), '') AS DOUBLE),
+    CAST(NULLIF(TRIM(ic.polio_cases), '') AS DOUBLE),
+    CAST(NULLIF(TRIM(ic.cases_guinea_worm), '') AS DOUBLE),
+    CAST(NULLIF(TRIM(ic.Number_rabies), '') AS DOUBLE),
+    CAST(NULLIF(TRIM(ic.Number_malaria), '') AS DOUBLE),
+    CAST(NULLIF(TRIM(ic.Number_hiv), '') AS DOUBLE),
+    CAST(NULLIF(TRIM(ic.Number_tuberculosis), '') AS DOUBLE),
+    CAST(NULLIF(TRIM(ic.Number_smallpox), '') AS DOUBLE),
+    CAST(NULLIF(TRIM(ic.Number_cholera_cases), '') AS DOUBLE)
+FROM infectious_cases ic
+JOIN entities e
+    ON TRIM(ic.Entity) = e.entity
+    AND NULLIF(TRIM(ic.Code), '') <=> e.code;
+
+
+-- TASK 03
+
+SELECT
+    e.entity,
+    e.code,
+    AVG(icn.number_rabies) AS avg_rabies,
+    MIN(icn.number_rabies) AS min_rabies,
+    MAX(icn.number_rabies) AS max_rabies,
+    SUM(icn.number_rabies) AS sum_rabies
+FROM infectious_cases_normalized icn
+JOIN entities e ON icn.entity_id = e.id
+WHERE icn.number_rabies IS NOT NULL
+GROUP BY e.entity, e.code
+ORDER BY avg_rabies DESC
+LIMIT 10;
+
+
+-- TASK 04
+
+SELECT
+    Year,
+    MAKEDATE(Year, 1) AS year_date,
+    CURDATE() AS today_date,
+    TIMESTAMPDIFF(YEAR, MAKEDATE(Year, 1), CURDATE()) AS year_diff
+FROM infectious_cases_normalized
+LIMIT 10;
+
+
+-- TASK 05
+
+DROP FUNCTION IF EXISTS get_years_from_current_date;
+
+DELIMITER //
+
+CREATE FUNCTION get_years_from_current_date(input_year INT)
+RETURNS INT
+NOT DETERMINISTIC
+NO SQL
+BEGIN
+    DECLARE generated_date DATE;
+
+    IF input_year IS NULL THEN
+        RETURN NULL;
+    END IF;
+
+    SET generated_date = STR_TO_DATE(
+        CONCAT(input_year, '-01-01'),
+        '%Y-%m-%d'
+    );
+
+    RETURN TIMESTAMPDIFF(YEAR, generated_date, CURDATE());
+END //
+
+DELIMITER ;
+
+SELECT
+    `year`,
+    STR_TO_DATE(CONCAT(`year`, '-01-01'), '%Y-%m-%d') AS generated_date,
+    CURDATE() AS today_date,
+    get_years_from_current_date(`year`) AS year_diff
+FROM infectious_cases_normalized
+LIMIT 10;
